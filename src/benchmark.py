@@ -1,153 +1,129 @@
 import os
 import time
 
-import torch
-import torch.nn as nn
-from torchvision import models
+import numpy as np
+import onnxruntime as ort
 
 
-CHECKPOINT_PATH = "./results/mobilenetv3_cifar10_fp32.pth"
+FP32_PATH = "./results/mobilenetv3_cifar10_fp32.onnx"
+INT8_PATH = "./results/mobilenetv3_cifar10_int8.onnx"
+
 INPUT_SHAPE = (1, 3, 32, 32)
 
-WARMUP_RUNS = 20
-BENCHMARK_RUNS = 100
+WARMUP_RUNS = 50
+BENCHMARK_RUNS = 500
 
 
-def build_model():
-    model = models.mobilenet_v3_small(weights=None)
+def get_model_size(path):
+    total_size = os.path.getsize(path)
 
-    # Same CIFAR-10 adaptations used during training.
-    model.features[0][0] = nn.Conv2d(
-        in_channels=3,
-        out_channels=16,
-        kernel_size=3,
-        stride=1,
-        padding=1,
-        bias=False,
+    data_path = path + ".data"
+
+    if os.path.exists(data_path):
+        total_size += os.path.getsize(data_path)
+
+    return total_size / (1024 ** 2)
+
+
+def benchmark(model_path, name):
+
+    session = ort.InferenceSession(
+        model_path,
+        providers=["CPUExecutionProvider"],
     )
 
-    model.features[0][1] = nn.BatchNorm2d(16)
+    input_name = session.get_inputs()[0].name
 
-    model.classifier[3] = nn.Linear(
-        model.classifier[3].in_features,
-        10,
+    dummy_input = np.random.randn(
+        *INPUT_SHAPE
+    ).astype(np.float32)
+
+    # Warmup
+    for _ in range(WARMUP_RUNS):
+        session.run(
+            None,
+            {input_name: dummy_input},
+        )
+
+    latencies = []
+
+    # Benchmark
+    for _ in range(BENCHMARK_RUNS):
+
+        start = time.perf_counter()
+
+        session.run(
+            None,
+            {input_name: dummy_input},
+        )
+
+        end = time.perf_counter()
+
+        latencies.append(
+            (end - start) * 1000
+        )
+
+    latencies = np.array(latencies)
+
+    median = np.median(latencies)
+    p95 = np.percentile(latencies, 95)
+
+    print(f"\n{name}")
+    print("-" * 45)
+
+    print(
+        f"Model size     : "
+        f"{get_model_size(model_path):.2f} MB"
     )
 
-    return model
-
-
-def load_model(device):
-    checkpoint = torch.load(
-        CHECKPOINT_PATH,
-        map_location=device,
+    print(
+        f"Median latency : "
+        f"{median:.3f} ms"
     )
 
-    model = build_model()
-    model.load_state_dict(checkpoint["model_state_dict"])
-    model.to(device)
-    model.eval()
-
-    return model
-
-
-def benchmark_cpu():
-    device = torch.device("cpu")
-    model = load_model(device)
-
-    dummy_input = torch.randn(INPUT_SHAPE, device=device)
-
-    with torch.inference_mode():
-
-        for _ in range(WARMUP_RUNS):
-            _ = model(dummy_input)
-
-        latencies = []
-
-        for _ in range(BENCHMARK_RUNS):
-            start = time.perf_counter()
-
-            _ = model(dummy_input)
-
-            end = time.perf_counter()
-            latencies.append((end - start) * 1000)
-
-    latencies.sort()
-
-    median = latencies[len(latencies) // 2]
-    p95 = latencies[int(len(latencies) * 0.95)]
-
-    print("\nCPU Benchmark")
-    print("-" * 40)
-    print(f"Median latency : {median:.3f} ms")
-    print(f"P95 latency    : {p95:.3f} ms")
-    print(f"Throughput     : {1000 / median:.2f} FPS")
-
-
-def benchmark_gpu():
-    if not torch.cuda.is_available():
-        print("\nCUDA is not available.")
-        return
-
-    device = torch.device("cuda")
-    model = load_model(device)
-
-    dummy_input = torch.randn(INPUT_SHAPE, device=device)
-
-    with torch.inference_mode():
-
-        for _ in range(WARMUP_RUNS):
-            _ = model(dummy_input)
-
-        torch.cuda.synchronize()
-
-        latencies = []
-
-        for _ in range(BENCHMARK_RUNS):
-            torch.cuda.synchronize()
-            start = time.perf_counter()
-
-            _ = model(dummy_input)
-
-            torch.cuda.synchronize()
-            end = time.perf_counter()
-
-            latencies.append((end - start) * 1000)
-
-    latencies.sort()
-
-    median = latencies[len(latencies) // 2]
-    p95 = latencies[int(len(latencies) * 0.95)]
-
-    print("\nGPU Benchmark")
-    print("-" * 40)
-    print(f"GPU            : {torch.cuda.get_device_name(0)}")
-    print(f"Median latency : {median:.3f} ms")
-    print(f"P95 latency    : {p95:.3f} ms")
-    print(f"Throughput     : {1000 / median:.2f} FPS")
-
-
-def model_statistics():
-    model = build_model()
-
-    parameter_count = sum(
-        parameter.numel()
-        for parameter in model.parameters()
+    print(
+        f"P95 latency    : "
+        f"{p95:.3f} ms"
     )
 
-    checkpoint_size_mb = (
-        os.path.getsize(CHECKPOINT_PATH) / (1024 ** 2)
+    print(
+        f"Throughput     : "
+        f"{1000 / median:.2f} FPS"
     )
 
-    print("\nModel Statistics")
-    print("-" * 40)
-    print(f"Parameters     : {parameter_count:,}")
-    print(f"Checkpoint size: {checkpoint_size_mb:.2f} MB")
+    return median, p95
 
 
 if __name__ == "__main__":
-    print("FP32 MobileNetV3-Small Benchmark")
-    print("=" * 40)
 
-    model_statistics()
-    benchmark_cpu()
-    benchmark_gpu()
+    print("ONNX Runtime FP32 vs INT8 Benchmark")
+    print("=" * 50)
+
+    fp32_median, fp32_p95 = benchmark(
+        FP32_PATH,
+        "FP32",
+    )
+
+    int8_median, int8_p95 = benchmark(
+        INT8_PATH,
+        "INT8",
+    )
+
+    latency_improvement = (
+        (fp32_median - int8_median)
+        / fp32_median
+        * 100
+    )
+
+    print("\nOptimization Impact")
+    print("-" * 45)
+
+    print(
+        f"Latency improvement: "
+        f"{latency_improvement:.2f}%"
+    )
+
+    print(
+        f"Speedup: "
+        f"{fp32_median / int8_median:.2f}x"
+    )
