@@ -1,34 +1,34 @@
 import os
 
 import torch
-import torch.nn as nn
-from torchvision import models
+
+from model import build_model
 
 
-CHECKPOINT_PATH = "./results/mobilenetv3_cifar10_fp32.pth"
-OUTPUT_PATH = "./results/mobilenetv3_cifar10_fp32.onnx"
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+CHECKPOINT_PATH = os.path.join(
+    PROJECT_ROOT,
+    "results",
+    "mobilenetv3_cifar10_fp32.pth",
+)
+
+OUTPUT_PATH = os.path.join(
+    PROJECT_ROOT,
+    "results",
+    "mobilenetv3_cifar10_fp32.onnx",
+)
 
 
-def build_model():
-    model = models.mobilenet_v3_small(weights=None)
+def get_model_size(path):
+    total_size = os.path.getsize(path)
 
-    model.features[0][0] = nn.Conv2d(
-        in_channels=3,
-        out_channels=16,
-        kernel_size=3,
-        stride=1,
-        padding=1,
-        bias=False,
-    )
+    data_path = path + ".data"
 
-    model.features[0][1] = nn.BatchNorm2d(16)
+    if os.path.exists(data_path):
+        total_size += os.path.getsize(data_path)
 
-    model.classifier[3] = nn.Linear(
-        model.classifier[3].in_features,
-        10,
-    )
-
-    return model
+    return total_size / (1024 ** 2)
 
 
 def main():
@@ -61,10 +61,7 @@ def main():
     )
 
     print(f"Exported ONNX model: {OUTPUT_PATH}")
-    print(
-        f"Model size: "
-        f"{os.path.getsize(OUTPUT_PATH) / (1024 ** 2):.2f} MB"
-    )
+    print(f"Total model size: {get_model_size(OUTPUT_PATH):.2f} MB")
 
 
 if __name__ == "__main__":

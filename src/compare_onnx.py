@@ -1,29 +1,26 @@
+import os
+
 import numpy as np
 import torch
-import torch.nn as nn
 import onnxruntime as ort
-from torchvision import datasets, models, transforms
+from torchvision import datasets, transforms
+
+from model import build_model
 
 
-CHECKPOINT_PATH = "./results/mobilenetv3_cifar10_fp32.pth"
-ONNX_PATH = "./results/mobilenetv3_cifar10_fp32.onnx"
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
+CHECKPOINT_PATH = os.path.join(
+    PROJECT_ROOT,
+    "results",
+    "mobilenetv3_cifar10_fp32.pth",
+)
 
-def build_model():
-    model = models.mobilenet_v3_small(weights=None)
-
-    model.features[0][0] = nn.Conv2d(
-        3, 16, kernel_size=3, stride=1, padding=1, bias=False
-    )
-
-    model.features[0][1] = nn.BatchNorm2d(16)
-
-    model.classifier[3] = nn.Linear(
-        model.classifier[3].in_features,
-        10,
-    )
-
-    return model
+ONNX_PATH = os.path.join(
+    PROJECT_ROOT,
+    "results",
+    "mobilenetv3_cifar10_fp32.onnx",
+)
 
 
 def main():
