@@ -12,10 +12,21 @@ from onnxruntime.quantization import (
 )
 
 
-ONNX_PATH = "./results/mobilenetv3_cifar10_fp32.onnx"
-INT8_PATH = "./results/mobilenetv3_cifar10_int8.onnx"
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-DATA_DIR = "./data"
+ONNX_PATH = os.path.join(
+    PROJECT_ROOT,
+    "results",
+    "mobilenetv3_cifar10_fp32.onnx",
+)
+
+INT8_PATH = os.path.join(
+    PROJECT_ROOT,
+    "results",
+    "mobilenetv3_cifar10_int8.onnx",
+)
+
+DATA_DIR = os.path.join(PROJECT_ROOT, "data")
 
 # Number of calibration images.
 CALIBRATION_SAMPLES = 500
