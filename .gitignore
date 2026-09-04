@@ -11,3 +11,4 @@ results/*.onnx.data
 
 benchmarks/profiling_results/
 benchmarks/graph_opt_experiment/
+benchmarks/batchnorm_experiment/
