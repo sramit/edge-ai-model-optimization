@@ -1,4 +1,6 @@
+import argparse
 import os
+import time
 
 import numpy as np
 import onnx
@@ -20,21 +22,20 @@ ONNX_PATH = os.path.join(
     "mobilenetv3_cifar10_fp32.onnx",
 )
 
-INT8_PATH = os.path.join(
-    PROJECT_ROOT,
-    "results",
-    "mobilenetv3_cifar10_int8.onnx",
-)
+RESULTS_DIR = os.path.join(PROJECT_ROOT, "results")
 
 DATA_DIR = os.path.join(PROJECT_ROOT, "data")
 
-# Number of calibration images.
+# Number of calibration images (default; overridable with --calibration-samples).
 CALIBRATION_SAMPLES = 500
+
+# Output filename within results/ (default; overridable with --output).
+DEFAULT_OUTPUT_NAME = "mobilenetv3_cifar10_int8.onnx"
 
 
 class CIFAR10CalibrationDataReader(CalibrationDataReader):
 
-    def __init__(self):
+    def __init__(self, num_samples=CALIBRATION_SAMPLES):
         self.transform = transforms.Compose([
             transforms.ToTensor(),
             transforms.Normalize(
@@ -52,7 +53,7 @@ class CIFAR10CalibrationDataReader(CalibrationDataReader):
 
         self.data = []
 
-        for index in range(CALIBRATION_SAMPLES):
+        for index in range(num_samples):
             image, _ = dataset[index]
 
             # Add batch dimension.
@@ -82,7 +83,32 @@ class CIFAR10CalibrationDataReader(CalibrationDataReader):
         self.index = 0
 
 
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description="INT8 post-training static quantization (QDQ)."
+    )
+
+    parser.add_argument(
+        "--calibration-samples",
+        type=int,
+        default=CALIBRATION_SAMPLES,
+        help="Number of CIFAR-10 training images used for calibration.",
+    )
+
+    parser.add_argument(
+        "--output",
+        type=str,
+        default=DEFAULT_OUTPUT_NAME,
+        help="Output filename, written under results/.",
+    )
+
+    return parser.parse_args()
+
+
 def main():
+    args = parse_args()
+
+    int8_path = os.path.join(RESULTS_DIR, args.output)
 
     if not os.path.exists(ONNX_PATH):
         raise FileNotFoundError(
@@ -90,15 +116,17 @@ def main():
         )
 
     print("Starting INT8 post-training quantization...")
-    print(f"Calibration samples: {CALIBRATION_SAMPLES}")
+    print(f"Calibration samples: {args.calibration_samples}")
 
-    calibration_data_reader = (
-        CIFAR10CalibrationDataReader()
+    calibration_start = time.perf_counter()
+
+    calibration_data_reader = CIFAR10CalibrationDataReader(
+        num_samples=args.calibration_samples
     )
 
     quantize_static(
         model_input=ONNX_PATH,
-        model_output=INT8_PATH,
+        model_output=int8_path,
         calibration_data_reader=calibration_data_reader,
 
         # INT8 activations.
@@ -119,14 +147,17 @@ def main():
 
     )
 
+    calibration_time = time.perf_counter() - calibration_start
+
     size_mb = (
-        os.path.getsize(INT8_PATH)
+        os.path.getsize(int8_path)
         / (1024 ** 2)
     )
 
     print("\nINT8 quantization complete.")
-    print(f"Output: {INT8_PATH}")
+    print(f"Output: {int8_path}")
     print(f"Model size: {size_mb:.2f} MB")
+    print(f"Calibration + quantization time: {calibration_time:.2f} s")
 
 
 if __name__ == "__main__":
