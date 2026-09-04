@@ -27,7 +27,7 @@ RESULTS_DIR = os.path.join(PROJECT_ROOT, "results")
 DATA_DIR = os.path.join(PROJECT_ROOT, "data")
 
 # Number of calibration images (default; overridable with --calibration-samples).
-CALIBRATION_SAMPLES = 500
+CALIBRATION_SAMPLES = 1000
 
 # Output filename within results/ (default; overridable with --output).
 DEFAULT_OUTPUT_NAME = "mobilenetv3_cifar10_int8.onnx"
@@ -113,7 +113,7 @@ def parse_args():
         "--calibrate-method",
         type=str,
         choices=sorted(CALIBRATION_METHODS),
-        default="minmax",
+        default="percentile",
         help="Activation calibration method.",
     )
 
