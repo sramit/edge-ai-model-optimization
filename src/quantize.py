@@ -114,8 +114,8 @@ def main():
         calibrate_method=CalibrationMethod.MinMax,
 
         # QOperator representation.
-        quant_format=QuantFormat.QOperator,
-        #quant_format=QuantFormat.QDQ,
+        #quant_format=QuantFormat.QOperator,
+        quant_format=QuantFormat.QDQ,
 
     )
 
