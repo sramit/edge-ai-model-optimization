@@ -32,6 +32,13 @@ CALIBRATION_SAMPLES = 500
 # Output filename within results/ (default; overridable with --output).
 DEFAULT_OUTPUT_NAME = "mobilenetv3_cifar10_int8.onnx"
 
+# Activation calibration method choices (default; overridable with --calibrate-method).
+CALIBRATION_METHODS = {
+    "minmax": CalibrationMethod.MinMax,
+    "entropy": CalibrationMethod.Entropy,
+    "percentile": CalibrationMethod.Percentile,
+}
+
 
 class CIFAR10CalibrationDataReader(CalibrationDataReader):
 
@@ -102,6 +109,14 @@ def parse_args():
         help="Output filename, written under results/.",
     )
 
+    parser.add_argument(
+        "--calibrate-method",
+        type=str,
+        choices=sorted(CALIBRATION_METHODS),
+        default="minmax",
+        help="Activation calibration method.",
+    )
+
     return parser.parse_args()
 
 
@@ -117,6 +132,7 @@ def main():
 
     print("Starting INT8 post-training quantization...")
     print(f"Calibration samples: {args.calibration_samples}")
+    print(f"Calibration method: {args.calibrate_method}")
 
     calibration_start = time.perf_counter()
 
@@ -138,8 +154,8 @@ def main():
         # Per-channel weight quantization.
         per_channel=True,
 
-        # Min/max calibration for activations.
-        calibrate_method=CalibrationMethod.MinMax,
+        # Activation calibration method.
+        calibrate_method=CALIBRATION_METHODS[args.calibrate_method],
 
         # QOperator representation.
         #quant_format=QuantFormat.QOperator,
