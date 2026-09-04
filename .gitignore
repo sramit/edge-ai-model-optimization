@@ -8,3 +8,5 @@ results/*.pth
 data/
 results/*.onnx
 results/*.onnx.data
+
+benchmarks/profiling_results/
