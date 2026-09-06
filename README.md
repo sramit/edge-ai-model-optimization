@@ -131,3 +131,69 @@ equated.
 win for model size and a near-zero-cost win for accuracy (0.04 pp drop with Percentile
 calibration), but it is **not** a latency or throughput optimization — deploying INT8 here trades
 size for a measured latency regression, not an improvement.
+
+## Phase 2 — Deeper Optimization Analysis
+
+Phase 2 investigates the behavior of the selected INT8 QDQ configuration beyond
+the original accuracy, size, and latency sweep. Each experiment is implemented
+as standalone investigative tooling under `benchmarks/`.
+
+### Phase 2 Experiment 1 — ONNX Runtime graph optimization (measured)
+
+Explicitly setting ONNX Runtime's `graph_optimization_level` to
+`ORT_ENABLE_ALL` produced no meaningful latency difference compared with the
+existing benchmark configuration.
+
+**Interpretation:** both configurations already used ONNX Runtime's effective
+default graph optimization level, so explicitly setting `ORT_ENABLE_ALL` did
+not provide an additional optimization benefit.
+
+### Phase 2 Experiment 2 — BatchNorm folding verification (measured)
+
+BatchNorm folding was independently verified by comparing the algebraically
+folded Conv parameters against the Conv initializers exported to ONNX.
+
+**Result:** all **34/34 Conv + BatchNorm folds** matched the exported ONNX Conv
+initializers with a maximum numerical difference of **0.0**.
+
+**Interpretation:** the BatchNorm folding performed during model/export
+optimization is numerically consistent with the exported ONNX graph for all
+verified Conv + BatchNorm pairs.
+
+### Phase 2 Experiment 3 — End-to-end quantization error analysis (measured)
+
+The selected FP32 and INT8 models were evaluated on the same **10,000 CIFAR-10
+test samples**. Final output tensors were compared directly to quantify the
+numerical effect of INT8 quantization.
+
+| Metric | Result |
+|---|---:|
+| Mean absolute error (MAE) | 0.18883 |
+| RMSE | 0.24208 |
+| P95 absolute error | 0.48289 |
+| P99 absolute error | 0.67298 |
+| Maximum absolute error | 1.42308 |
+| Cosine similarity | 0.99671 |
+| Prediction agreement | 95.69% |
+| FP32 accuracy | 73.56% |
+| INT8 accuracy | 73.52% |
+| Accuracy drop | 0.04 pp |
+
+**Interpretation:** INT8 introduces measurable numerical differences at the
+model output, but the overall output vectors remain highly similar to FP32
+(cosine similarity **0.99671**). The P95 and P99 absolute errors were **0.48289**
+and **0.67298**, respectively.
+
+Prediction agreement was **95.69%**, while aggregate accuracy changed by only
+**0.04 percentage points** (73.56% → 73.52%). This demonstrates that the
+observed quantization error has negligible impact on aggregate classification
+accuracy for this model and calibration configuration.
+
+Mean relative error is reported for completeness but is not treated as the
+primary quality indicator because relative error can become unstable when the
+reference FP32 logits are close to zero.
+
+The experiment is implemented in
+`benchmarks/quantization_error_experiment.py`, with machine-readable results in
+`benchmarks/quantization_error_results/quantization_error_summary.json`.
+

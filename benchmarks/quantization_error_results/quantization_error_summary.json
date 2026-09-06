@@ -1,0 +1,23 @@
+{
+  "experiment": "Phase 2 Experiment 3",
+  "description": "End-to-end FP32 vs INT8 output error analysis",
+  "fp32_model": "/home/ankit/edge-ai-model-optimization/results/mobilenetv3_cifar10_fp32.onnx",
+  "int8_model": "/home/ankit/edge-ai-model-optimization/results/mobilenetv3_cifar10_int8.onnx",
+  "num_samples": 10000,
+  "batch_size": 128,
+  "metrics": {
+    "mae": 0.18883270025253296,
+    "rmse": 0.24207499623298645,
+    "max_absolute_error": 1.4230833053588867,
+    "mean_relative_error": 0.4979853928089142,
+    "cosine_similarity": 0.9967132210731506,
+    "prediction_agreement_percent": 95.69,
+    "p95_absolute_error": 0.4828885495662689,
+    "p99_absolute_error": 0.672976016998291
+  },
+  "accuracy": {
+    "fp32_percent": 73.56,
+    "int8_percent": 73.52,
+    "drop_percentage_points": 0.04000000000000625
+  }
+}
